@@ -2,7 +2,7 @@
 
 
 ### People working on it
-- Diwenitissiou Andjawo
+- Diwenitissiou Andjawo, Officially here
 - Matthew Tavenner
 - Tawanda Sibanda
 - Yonatan Getachew
