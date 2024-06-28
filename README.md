@@ -3,7 +3,7 @@
 
 ### People working on it
 - Diwenitissiou Andjawo, Officially here
-- Matthew Tavenner
+- Matthew Tavenner, assistant Goat
 - Tawanda Sibanda
 - Yonatan Getachew aka The Goat🐐 
 
