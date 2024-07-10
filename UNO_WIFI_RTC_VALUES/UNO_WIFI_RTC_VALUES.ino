@@ -55,7 +55,8 @@ void setup() {
 
 void loop() {
   int sensorValue = analogRead(sensorPin);
-  float millivolts = sensorValue * (5.0 / 1023.0)* 1000;
+  float Voltage = sensorValue * (5.0 / 1023.0)* 1000;
+  int DeviceID ="0001"
 
   if(WiFi.status() == WL_CONNECTED) {
     // Print the connection status and signal strength
@@ -74,21 +75,23 @@ void loop() {
   // it to UTC +2 by passing the time zone offset in hours.
   // You may change the time zone offset to your local one.
   auto timeZoneOffsetHours = -6;
-  auto unixTime = timeClient.getEpochTime() + (timeZoneOffsetHours * 3600);
+  auto DateStamp = timeClient.getEpochTime() + (timeZoneOffsetHours * 3600);
   Serial.print(" \t Unix time = ");
-  Serial.print(unixTime);
+  Serial.print(DateStamp);
 
-  float VWC = (4.824e-10 * pow(millivolts, 3)) 
-            - (2.278e-6 * pow(millivolts, 2)) 
-            + (3.898e-3 * millivolts) 
+  float Soil_moisture = (4.824e-10 * pow(Voltage, 3)) 
+            - (2.278e-6 * pow(Voltage, 2)) 
+            + (3.898e-3 * Voltage) 
             - 2.154;
 
   // Print the results to the Serial Monitor
   Serial.print(" \t Millivolts: ");
-  Serial.print(millivolts, 1); // Print millivolts with 1 decimal place
+  Serial.print(Voltage, 1); // Print millivolts with 1 decimal place
   Serial.print(" mV\t VWC: ");
-  Serial.print(VWC, 2); // Print VWC with 5 decimal places
+  Serial.print(Soil_moisture, 2); // Print VWC with 2 decimal places
   Serial.print("\t");
+  Serial.print(" \t Device_ID");
+  Serial.print(DeviceID);
 
   // Wait for 10 seconds before checking again
   delay(10000);
