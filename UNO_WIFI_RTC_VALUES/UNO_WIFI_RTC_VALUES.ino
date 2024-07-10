@@ -5,8 +5,8 @@
 #include <WiFiUdp.h>
 
 // Replace these with your network credentials
-const char* ssid = "Verizon-MiFi8800L-B8D0";
-const char* password = "3c55dc92";
+char* ssid = "NU-IoT";
+const char* password = "mstvddmh";
 const int sensorPin = A0;
 
 WiFiUDP Udp; // A UDP instance to let us send and receive packets over UDP
@@ -25,11 +25,11 @@ void setup() {
   WiFi.begin(ssid, password);
 
   // Wait for connection
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
+  if (WiFi.status() != WL_CONNECTED) {
+    delay(10000);
     Serial.print(".");
   }
-
+  else{
   // Once connected, print some information
   Serial.println("");
   Serial.println("Wi-Fi connected.");
@@ -43,6 +43,7 @@ void setup() {
   Serial.println("\nStarting connection to NTP server...");
   timeClient.begin();
   timeClient.update();
+  }
 
   // Get the current date and time from an NTP server and convert
   // it to UTC +2 by passing the time zone offset in hours.
@@ -56,7 +57,7 @@ void setup() {
 void loop() {
   int sensorValue = analogRead(sensorPin);
   float Voltage = sensorValue * (5.0 / 1023.0)* 1000;
-  int DeviceID ="0001"
+  float DeviceID = 0001;
 
   if(WiFi.status() == WL_CONNECTED) {
     // Print the connection status and signal strength
@@ -90,8 +91,9 @@ void loop() {
   Serial.print(" mV\t VWC: ");
   Serial.print(Soil_moisture, 2); // Print VWC with 2 decimal places
   Serial.print("\t");
-  Serial.print(" \t Device_ID");
-  Serial.print(DeviceID);
+  Serial.print(" \t Device_ID:");
+  Serial.print(DeviceID, 0);
+  Serial.print(" \n");
 
   // Wait for 10 seconds before checking again
   delay(10000);
