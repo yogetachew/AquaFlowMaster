@@ -5,8 +5,8 @@
 #include <WiFiUdp.h>
 
 // Replace these with your network credentials
-char* ssid = "NU-IoT";
-const char* password = "mstvddmh";
+char* ssid = "NU-IoT"; //Replace with the ssid name of the wifi
+const char* password = "mstvddmh"; //Replace with the password name of the wifi 
 const int sensorPin = A0;
 
 WiFiUDP Udp; // A UDP instance to let us send and receive packets over UDP
@@ -80,6 +80,7 @@ void loop() {
   Serial.print(" \t Unix time = ");
   Serial.print(DateStamp);
 
+// Calculate the Volumetric Water Content
   float Soil_moisture = (4.824e-10 * pow(Voltage, 3)) 
             - (2.278e-6 * pow(Voltage, 2)) 
             + (3.898e-3 * Voltage) 
