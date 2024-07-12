@@ -1,1 +1,445 @@
+#!/usr/bin/env python3
+
+import json
+import re
+import sys, os
+import threading
+import serial
+import serial.tools.list_ports
+import datetime
+from urllib import request, parse
+from multiprocessing import Process
+from random import randint
+from sys import exit
+from time import time,sleep
+import subprocess
+import digitalio
+import board
+from PIL import Image, ImageDraw, ImageFont
+from adafruit_rgb_display import st7789
+
+cwd = os.getcwd()
+stored_data_file = cwd + "/backup.json"
+url_base = "https://phrec-irrigation.com/api-v2/phrec_lora_cam_gateway.php"
+server_in_progress = False
+lora_device_port = None
+ser = None
+data = {}
+newIncomingMsgs = []
+piSerial = None
+
+# Create the ST7789 display:
+disp = st7789.ST7789(
+    board.SPI(),
+    cs=digitalio.DigitalInOut(board.CE0),
+    dc=digitalio.DigitalInOut(board.D25),
+    rst=None,
+    baudrate=64000000,
+    width=240,
+    height=240,
+    x_offset=0,
+    y_offset=80,
+)
+
+# Create blank image for drawing.
+# Make sure to create image with mode 'RGB' for full color.
+height = disp.width  # we swap height/width to rotate it to landscape!
+width = disp.height
+image = Image.new("RGB", (width, height))
+rotation = 180
+
+# Get drawing object to draw on image.
+draw = ImageDraw.Draw(image)
+
+# Draw a black filled box to clear the image.
+draw.rectangle((0, 0, width, height), outline=0, fill=(0, 0, 0))
+disp.image(image, rotation)
+# Draw some shapes.
+# First define some constants to allow easy resizing of shapes.
+padding = -2
+top = padding
+bottom = height - padding
+# Move left to right keeping track of the current x position for drawing shapes.
+x = 0
+
+# Alternatively load a TTF font.  Make sure the .ttf font file is in the
+# same directory as the python script!
+# Some other nice fonts to try: http://www.dafont.com/bitmap.php
+font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24)
+
+# Turn on the backlight
+backlight = digitalio.DigitalInOut(board.D22)
+backlight.switch_to_output()
+backlight.value = True
+buttonA = digitalio.DigitalInOut(board.D23)
+buttonB = digitalio.DigitalInOut(board.D24)
+buttonA.switch_to_input()
+buttonB.switch_to_input()
+menuMode = False
+restartIssued = False
+restartIssueTime = 0
+programStartTime = time()
+
+# ~ messages to print on small screen
+dispMsg = {
+	"l1": "______Gateway_____",
+	"l2": "",
+	"l3": "",
+	"l4": "",
+	"l5": ""
+}
+
+
+# ~ ============================================================== #
+def renderDisplay():
+	y = top
+	# Draw a black filled box to clear the image.
+	draw.rectangle((0, 0, width, height), outline=0, fill=0)
+	draw.text((x, y), dispMsg["l1"] , font=font, fill="#FF00FF")
+	y += font.getsize(dispMsg["l1"] )[1]
+	draw.text((x, y), dispMsg["l2"] , font=font, fill="#FFFFFF")
+	y += font.getsize(dispMsg["l2"] )[1]
+	draw.text((x, y), dispMsg["l3"] , font=font, fill="#FFFFFF")
+	y += font.getsize(dispMsg["l3"] )[1]
+	draw.text((x, y), dispMsg["l4"] , font=font, fill="#FFFFFF")
+	y += font.getsize(dispMsg["l4"] )[1]
+	draw.text((x, y), dispMsg["l5"] , font=font, fill="#FFFF00")
+	# Display image.
+	disp.image(image, rotation)
+
+# ~ ============================================================== #
+def btnPressListener():
+	global menuMode
+	global restartIssued
+	btnTop = not buttonA.value
+	btnDwn = not buttonB.value
+	
+	if btnTop or btnDwn:
+		print(btnTop, btnDwn)
+		if menuMode:
+			if btnTop:
+				restartIssued = True
+				restartIssueTime = time()
+				
+			if btnDwn:
+				menuMode = False
+		
+		else:
+			if btnDwn:
+				menuMode = True
+			
+		
+	
+
+
+
+# ~ ============================================================== #
+def setLoraDevicePort():
+	global lora_device_port
+	global ser
+	
+	try:
+		available_ports = list(serial.tools.list_ports.comports())
+		for port in available_ports:
+			if "CP2104" in port.description:
+				lora_device_port = port.device
+				ser = serial.Serial(lora_device_port, 9600, timeout=1)
+				ser.reset_input_buffer()
+	except Exception as e: 
+		print("Error: Setting LoRa port => ", e)
+
+
+
+# ~ ============================================================== #
+def sendUpdatesToServer(msg):
+	try:
+		if not dataAlreadySentToServer(msg):
+			print("Uploading msg to server: ", msg["dev_id"], " => ", msg["msg_counter"])
+			
+			update_data = json.dumps(msg)
+
+			req = request.Request(url_base)
+			req.add_header('Content-Type', 'application/json; charset=utf-8')
+			
+			if request.urlopen(req, data=update_data.encode()):
+				dispMsg["l5"] = "Info: Server-Sent"
+				saveData(msg)
+			
+		else:
+			print("Data already exists")
+			dispMsg["l5"] = "Info: Dup-Data-" + str(msg["dev_id"])
+
+	except Exception as e: 
+		print("Error: server updates => ", e)
+		dispMsg["l5"] = "Er: Server-Dis"
+	renderDisplay()
+
+
+
+# ~ ============================================================== #
+def readStoredData():
+	global data
+	try:
+		with open(stored_data_file, 'r') as file:
+			json_data = file.read()
+			data = json.loads(json_data)
+	except Exception as e:
+		print("Error: reading backup data => ", e)
+		dispMsg["l5"] = "Er: R-BkData"
+		renderDisplay()
+		
+# ~ ============================================================== #
+def saveData(msg):
+	global data
+	try:
+		data[msg["dev_id"]] = msg
+		data_str = json.dumps(data)
+		with open(stored_data_file, 'w') as saveFile:
+			saveFile.write(data_str)
+	except Exception as e:
+		print("Error: Writing backup data => ", e)
+		dispMsg["l5"] = "Er: W-BkData"
+		renderDisplay()
+		
+		
+		
+# ~ ============================================================== #
+def dataAlreadySentToServer(msg):
+	if int(msg["msg_counter"]) == 0:
+		return False
+	
+	try:
+		if msg["dev_id"] in data:
+			if int(data[msg["dev_id"]]["msg_timestamp"]) == int(msg["msg_timestamp"]):
+				return True
+	except Exception as e:
+		print("Error: duplicate check => ", e)
+		# ~ exc_type, exc_obj, exc_tb = sys.exc_info()
+		# ~ fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+		# ~ print(exc_type, fname, exc_tb.tb_lineno)
+	
+	return False
+		
+		
+		
+# ~ ===================================================================================//
+# ~ =========================== Decode serial messages ================================//
+# ~ ===================================================================================//
+def decodeSerialMsg(msg):
+	valid_pattern = r"^PHRECSTART.*PHRECEND$"
+	
+	if len(msg) < 47 or not re.match(valid_pattern, msg):
+		return (False, "")
+		
+	msg = msg[10:-8]
+	dev_id = msg[:4]
+	msg_counter = msg[4:10]
+	msg_timestamp = msg[10:20]
+	canopy = msg[20:22]
+	grapes = msg[22:24]
+	whitemold = msg[24:26]
+	bat = msg[26:28]
+	chrg = msg[28:29]
+	
+	decoded = {
+		"dev_id" : dev_id,
+		"msg_counter" : msg_counter,
+		"msg_timestamp" : msg_timestamp,
+		"canopy" : canopy,
+		"grapes" : grapes,
+		"whitemold" : whitemold,
+		"bat" : bat,
+		"chrg": chrg		
+	}
+	
+	
+	
+	return (True, decoded) 
+
+
+# ~ ===================================================================================//
+# ~ ======================= Serial connection to LoRa board ======================//
+# ~ ===================================================================================//
+def serialCon():	
+	global lora_device_port
+	global ser
+	try:
+		while ser.in_waiting > 0:
+			line = ser.readline().decode('utf-8').strip()
+			print(line)
+			decoded = decodeSerialMsg(line)
+			
+			if decoded[0]:
+				current_date = str(int(time())) + '\n'
+				# ~ Send current time to nodes
+				sleep(1)
+				ser.write(current_date.encode())
+				
+				dispMsg["l5"] = "Info: Msg in -" + str(decoded[1]["dev_id"])
+				renderDisplay()
+				newIncomingMsgs.append(decoded[1])
+				# ~ sendUpdatesToServer(decoded[1])
+	
+	except Exception as e:
+		lora_device_port = None
+		ser = None
+		print("Error: serial com => ", e)
+		dispMsg["l5"] = "Er: SC-Lost"
+		renderDisplay()
+		
+
+
+# ~ ============================================================== #
+def restart():
+	os.system("sudo reboot")
+	
+
+# ~ ============================================================== #
+def checkStatsForDisplay():
+	cmd = "hostname -I | cut -d' ' -f1"
+	IP = "IP: " + subprocess.check_output(cmd, shell=True).decode("utf-8")
+	dispMsg["l2"] = IP
+	
+	now = datetime.datetime.now()
+	dtStr = now.strftime("%d/%m/%y %H:%M:%S")
+	dispMsg["l3"] = dtStr
+	
+	loraBoardConnected = "LoRa Connected: Y"
+	if lora_device_port is None:
+		loraBoardConnected = "LoRa Connected: N"
+		
+	dispMsg["l4"] = loraBoardConnected
+	dispMsg["l5"] = "Info: "
+
+
+# ~ ============================================================== #
+def displayMenuMode():
+	dispMsg["l2"] = "Restart?"
+	dispMsg["l3"] = "YES"
+	dispMsg["l4"] = "NO"
+	dispMsg["l5"] = ""
+	renderDisplay()
+	
+# ~ ============================================================== #
+def displayRestart():
+	global restartIssueTime
+	
+	if restartIssueTime == 0:
+		restartIssueTime = time()
+		
+	secsToRestart = 10 - int(time() - restartIssueTime)
+	
+	if secsToRestart < 0:
+		secsToRestart = 0
+	
+		
+	
+	dispMsg["l2"] = "Restarting in... " + str(secsToRestart)
+	dispMsg["l3"] = ""
+	dispMsg["l4"] = ""
+	dispMsg["l5"] = ""
+	renderDisplay()
+	
+	if secsToRestart == 0:
+		sleep(1)
+		restart()
+
+
+# ~ ============================================================== #
+def gatewayUpdates():
+	global piSerial
+	
+	while True:
+		if piSerial is None:
+			try:
+				cmd = "cat /proc/cpuinfo | grep Serial"
+				result = subprocess.check_output(cmd, shell=True).decode("utf-8")
+				serialNum = result.strip().split(":")[1].strip()
+				
+				if len(serialNum) > 10 and len(serialNum) < 20:
+					piSerial = serialNum
+			except Exception as e:
+				print("Error: reading Pi serial => ", e)
+		
+		
+		try:
+			heartbeat = {"heartbeat": piSerial}
+			update_data = json.dumps(heartbeat)
+			req = request.Request(url_base)
+			req.add_header('Content-Type', 'application/json; charset=utf-8')
+			
+			if request.urlopen(req, data=update_data.encode()):
+				print("Gateway heartbeat sent to server")
+				dispMsg["l5"] = "Info: Heartbeat-Sent"
+
+		except Exception as e: 
+			print("Error: server heartbeat updates => ", e)
+			dispMsg["l5"] = "Er: Server-Dis"
+			
+		sleep(60)
+		
+# ~ ============================================================== #
+def sendNewMsgsToServer():
+	while True:
+		try:
+			if len(newIncomingMsgs) > 0:
+				msg = newIncomingMsgs.pop()
+				sendUpdatesToServer(msg)
+				print("New msg sent to server: ", msg)
+		except Exception as e:
+			print("Error: sending msg to server => ", e)
+		sleep(1)
+
+
+# ~ ============================================================== #
+def restartProgram():
+	timeNow = time()
+	
+	if timeNow - programStartTime > 3600:
+		cmd = "sudo systemctl restart canopycam"
+		os.system(cmd)
+
+	
+# ~ ============================================================== #
+def main():
+	print("PHREC CanopyCAM Gateway")
+	readStoredData()
+	
+	gateway_updates_thread = threading.Thread(target=gatewayUpdates)
+	gateway_updates_thread.daemon = True
+	gateway_updates_thread.start()
+	
+	send_msg_thread = threading.Thread(target=sendNewMsgsToServer)
+	send_msg_thread.daemon = True
+	send_msg_thread.start()
+	
+	
+	while True:
+		btnPressListener()
+		renderDisplay()
+		
+		if menuMode and not restartIssued:
+			displayMenuMode()
+			
+		elif menuMode and restartIssued:
+			displayRestart()
+		
+		else:
+			checkStatsForDisplay()
+			
+			if lora_device_port == None:
+				setLoraDevicePort()
+				
+			if lora_device_port is not None and ser is not None:
+				serialCon()
+		# ~ Restart the program every hour
+		restartProgram()
+		sleep(1)
+
+
+
+if __name__=="__main__":
+	main()
+
+
 
