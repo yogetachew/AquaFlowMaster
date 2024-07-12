@@ -8,7 +8,7 @@
 // Replace these with your network credentials
 char* ssid = "NU-IoT"; //Replace with the ssid name of the wifi
 const char* password = "bflpfzmt"; //Replace with the password name of the wifi 
-const char* server = "phrec-irrigation.com"; 
+const char* server = "45.132.240.246"; 
 const int sensorPin = A0;
 
 // Device ID
@@ -107,7 +107,7 @@ void loop() {
 WiFiClient client;
 
   // Connect to server
-  if (client.connect(server, 443)) {  // Use port 443 for HTTPS
+  if (client.connect(server, 80)) {  // Use port 80 for HTTPS
     Serial.println("Connected to server");
 
     // Make HTTP POST request
@@ -121,7 +121,7 @@ WiFiClient client;
 
     // Wait for server response
     while (client.connected() && !client.available()) {
-      delay(1);
+      delay(10);
     }
 
     while (client.available()) {
