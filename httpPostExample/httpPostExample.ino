@@ -40,9 +40,9 @@ void loop() {
   String path = "";
   String contentType = "application/json";
 
-  // assemble the body of the POST message:
-  // This are hardcoded for testing. This will be what we need to switch to varibles
-  // Device ID will be hardcoded. Don't forget to change Device ID
+  // Assemble the body of the POST message:
+  // This is hardcoded for testing. This will be what we need to switch to variables
+  // Device ID will be hardcoded. Don't forget to change the Device ID
   const char dev_id[] = "1002";
   int msg_timestamp = 1720815878;
   float soilmoisture = 32.4;
@@ -63,7 +63,7 @@ void loop() {
   // send the POST request
   client.post(path, contentType, postData);
 
-  // Print out the JSON to serial console. This can be deleted in final version that goes outside. Mostly debug print line
+  // Print out the JSON to the serial console. 
   Serial.println(postData);
 
   // read the status code and body of the response
