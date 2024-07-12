@@ -18,8 +18,7 @@ void setup() {
   while (!Serial) {
     ; // Wait for Serial to initialize
   }
-
-
+a
   // Start Wi-Fi connection
   Serial.println("Connecting to Wi-Fi...");
   WiFi.begin(ssid, password);
