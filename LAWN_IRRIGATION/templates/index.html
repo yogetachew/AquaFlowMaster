@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sensor Data Display</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        table, th, td {
+            border: 1px solid black;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <h1>Sensor Data</h1>
+    <table id="dataTable">
+        <thead>
+            <tr>
+                <th>Unix Time</th>
+                <th>Millivolts (mV)</th>
+                <th>VWC</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
+
+    <script>
+        async function fetchData() {
+            const response = await fetch('/data');
+            const data = await response.json();
+            const tableBody = document.querySelector('#dataTable tbody');
+            tableBody.innerHTML = '';
+
+            data.forEach(item => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${item.unix_time}</td>
+                    <td>${item.millivolts.toFixed(1)}</td>
+                    <td>${item.VWC.toFixed(2)}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+
+        setInterval(fetchData, 10000); // Fetch new data every 10 seconds
+        fetchData(); // Initial fetch
+    </script>
+</body>
+</html>
