@@ -6,8 +6,11 @@
 
 // Replace these with your network credentials
 char* ssid = "NU-IoT"; //Replace with the ssid name of the wifi
-const char* password = "mstvddmh"; //Replace with the password name of the wifi 
+const char* password = "tmvmrppp"; //Replace with the password name of the wifi 
 const int sensorPin = A0;
+
+// Device ID
+char* deviceID = "0001";
 
 WiFiUDP Udp; // A UDP instance to let us send and receive packets over UDP
 NTPClient timeClient(Udp);
@@ -57,7 +60,12 @@ void setup() {
 void loop() {
   int sensorValue = analogRead(sensorPin);
   float Voltage = sensorValue * (5.0 / 1023.0)* 1000;
-  float DeviceID = 0001;
+
+  // Read battery voltage from Analog pin A1; assign to BatterySensorValue variable
+  int BatterySensorValue = analogRead(A1);
+
+  // Convert the analog reading (which goes from 0 - 1023) to a voltage (0 - 5V) to read the battery voltage levels
+  float voltage = BatterySensorValue * (5.0 / 1023.0);
 
   if(WiFi.status() == WL_CONNECTED) {
     // Print the connection status and signal strength
@@ -92,8 +100,10 @@ void loop() {
   Serial.print(" mV\t VWC: ");
   Serial.print(Soil_moisture, 2); // Print VWC with 2 decimal places
   Serial.print("\t");
-  Serial.print(" \t Device_ID:");
-  Serial.print(DeviceID, 0);
+  Serial.print(" \t Device_ID: ");
+  Serial.print(deviceID);
+  Serial.print(" \t Battery Voltage: ");
+  Serial.print(voltage);
   Serial.print(" \n");
 
   // Wait for 10 seconds before checking again
