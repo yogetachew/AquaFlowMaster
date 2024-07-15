@@ -1,40 +1,47 @@
-#include <Arduino.h>
+#include <ArduinoHttpClient.h>
 #include <WiFi.h>
 #include <RTC.h>
 #include <NTPClient.h>
-#include <WiFiUdp.h>
-#include <ArduinoJson.h>
+#include <WiFiUDP.h>
 
-// Replace these with your network credentials
-char* ssid = "NU-IoT"; //Replace with the ssid name of the wifi
-const char* password = "bflpfzmt"; //Replace with the password name of the wifi 
-const char* server = "45.132.240.246"; 
-const int sensorPin = A0;
 
-// Device ID
-char* deviceID = "0003";
+/////// WiFi Settings ///////
+char ssid[] = "NU-IoT";
+char pass[] = "";
+int sensorPin = A0;
 
-WiFiUDP Udp; // A UDP instance to let us send and receive packets over UDP
+WiFiUdp Udp; // A UDP instance to let us send and receive packets over UDP
 NTPClient timeClient(Udp);
 
+// Address to the server to upload data to
+const char serverAddress[] = "";  // server address
+int port = 80;
+
+WiFiClient wifi;
+HttpClient client = HttpClient(wifi, serverAddress, port);
+int status = WL_IDLE_STATUS;
+
 void setup() {
-  // Start serial communication
-  Serial.begin(115200);
-  while (!Serial) // Wait for Serial to initialize
-  
+  Serial.begin(9600);
+  while(!Serial);
+  while ( status != WL_CONNECTED) {
+    Serial.print("Attempting to connect to Network named: ");
+    Serial.println(ssid);                   // print the network name (SSID);
 
-  // Start Wi-Fi connection
-  Serial.println("Connecting to Wi-Fi...");
-  Serial.println(ssid);
-  WiFi.begin(ssid, password);
+    // Connect to WPA/WPA2 network:
+    status = WiFi.begin(ssid, pass);
 
-  // Wait for connection
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(10000);
-    Serial.print(".");
+    RTC.begin();
   }
 
-  Serial.println("Connected to Wi-Fi");
+  // print the SSID of the network you're attached to:
+  Serial.print("SSID: ");
+  Serial.println(WiFi.SSID());
+
+  // print your WiFi shield's IP address:
+  IPAddress ip = WiFi.localIP();
+  Serial.print("IP Address: ");
+  Serial.println(ip);
 
   // Get the current date and time from an NTP server and convert
   // it to UTC +2 by passing the time zone offset in hours.
@@ -44,28 +51,34 @@ void setup() {
  
 }
 
-
 void loop() {
   int sensorValue = analogRead(sensorPin);
-  float Voltage = sensorValue * (5.0 / 1023.0)* 1000;
-
+  float Milivolts = sensorValue * (5.0 / 1023.0)* 1000;
+  
   // Read battery voltage from Analog pin A1; assign to BatterySensorValue variable
   int BatterySensorValue = analogRead(A1);
 
   // Convert the analog reading (which goes from 0 - 1023) to a voltage (0 - 5V) to read the battery voltage levels
   float voltage = BatterySensorValue * (5.0 / 1023.0);
 
-  if(WiFi.status() == WL_CONNECTED) {
-    // Print the connection status and signal strength
-    Serial.println("Connected to Wi-Fi");
-    Serial.print("Signal strength (RSSI): ");
-    Serial.print(WiFi.RSSI());
-    Serial.println(" dBm");
-  } 
-  else {
-    Serial.println("Disconnected from Wi-Fi");
-  }
-  
+  // Calculate the Volumetric Water Content
+  float Soil_moisture = (4.824e-10 * pow(Milivolts, 3)) 
+            - (2.278e-6 * pow(Milivolts, 2)) 
+            + (3.898e-3 * Milivolts) 
+            - 2.154;
+
+  // assemble the path for the POST message:
+  String path = "";
+  String contentType = "application/json";
+
+  // Assemble the body of the POST message:
+  // This is hardcoded for testing. This will be what we need to switch to variables
+  // Device ID will be hardcoded. Don't forget to change the Device ID
+  const char dev_id[] = "1002";
+  int msg_timestamp = 1720815878;
+  float soilmoisture = Soil_moisture;
+  int voltage = Milivolts;
+  float bat = voltage;
   timeClient.update();
 
   // Get the current date and time from an NTP server and convert
@@ -76,64 +89,34 @@ void loop() {
   Serial.print(" \t Unix time = ");
   Serial.print(DateStamp);
 
-// Calculate the Volumetric Water Content
-  float Soil_moisture = (4.824e-10 * pow(Voltage, 3)) 
-            - (2.278e-6 * pow(Voltage, 2)) 
-            + (3.898e-3 * Voltage) 
-            - 2.154;
 
-  // Print the results to the Serial Monitor
-  Serial.print(" \t Millivolts: ");
-  Serial.print(Voltage, 1); // Print millivolts with 1 decimal place
-  Serial.print(" mV\t VWC: ");
-  Serial.print(Soil_moisture, 2); // Print VWC with 2 decimal places
-  Serial.print("\t");
-  Serial.print(" \t Device_ID: ");
-  Serial.print(deviceID);
-  Serial.print(" \t Battery Voltage: ");
-  Serial.print(voltage);
-  Serial.print(" \n");
+  // Construct JSON string
+  String postData = "{";
+  postData += "\"dev_id\":\"" + String(dev_id) + "\",";
+  postData += "\"msg_timestamp\":\"" + String(msg_timestamp) + "\",";
+  postData += "\"soilmoisture\":\"" + String(soilmoisture) + "\",";
+  postData += "\"voltage\":\"" + String(voltage) + "\",";
+  postData += "\"bat\":\"" + String(bat) + "\"";
+  postData += "}";
 
-  // Prepare JSON data
-  StaticJsonDocument<200> jsonDoc;
-  jsonDoc["dev_id"] = "deviceid";  // Replace with your actual device ID
-  jsonDoc["msg_timestamp"] = DateStamp; // Use current timestamp
-  jsonDoc["soilmoisture"] = Soil_moisture;
-  jsonDoc["voltage"] = Voltage;
-  jsonDoc["bat"] = voltage;
+  Serial.println("making POST request");
 
-  char jsonBuffer[512];
-  serializeJson(jsonDoc, jsonBuffer);
-WiFiClient client;
+  // send the POST request
+  client.post(path, contentType, postData);
 
-  // Connect to server
-  if (client.connect(server, 80)) {  // Use port 80 for HTTPS
-    Serial.println("Connected to server");
+  // Print out the JSON to the serial console. 
+  Serial.println(postData);
 
-    // Make HTTP POST request
-    client.println("POST /apiv2/phrec_lawn_soil_moisture.php HTTP/1.1");
-    client.println("Host: phrec-irrigation.com");
-    client.println("Content-Type: application/json");
-    client.print("Content-Length: ");
-    client.println(strlen(jsonBuffer));
-    client.println();
-    client.println(jsonBuffer);
+  // read the status code and body of the response
+  // Lets us know if the server got the post and responds if data was added successfully or not
+  int statusCode = client.responseStatusCode();
+  String response = client.responseBody();
 
-    // Wait for server response
-    while (client.connected() && !client.available()) {
-      delay(10);
-    }
+  Serial.print("Status code: ");
+  Serial.println(statusCode);
+  Serial.print("Response: ");
+  Serial.println(response);
 
-    while (client.available()) {
-      char c = client.read();
-      Serial.print(c);
-    }
-
-    // Close connection
-    client.stop();
-  } else {
-    Serial.println("Connection to server failed");
-  }
-  // Wait for 10 seconds before checking again
-  delay(10000);
+  Serial.println("Wait three minutes\n");
+  delay(180000);
 }
