@@ -18,10 +18,9 @@ NTPClient timeClient(Udp);
 void setup() {
   // Start serial communication
   Serial.begin(115200);
-  while (!Serial) {
-    ; // Wait for Serial to initialize
-  }
-a
+  while (!Serial) // Wait for Serial to initialize
+  
+
   // Start Wi-Fi connection
   Serial.println("Connecting to Wi-Fi...");
   WiFi.begin(ssid, password);
