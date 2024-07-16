@@ -16,11 +16,10 @@ WiFiUDP Udp; // A UDP instance to let us send and receive packets over UDP
 NTPClient timeClient(Udp);
 
 void setup() {
-  // Start serial communicationz
+  // Start serial communication
   Serial.begin(115200);
-  while (!Serial) {
-    ; // Wait for Serial to initialize
-  }
+  while (!Serial) // Wait for Serial to initialize
+  
 
   // Start Wi-Fi connection
   Serial.println("Connecting to Wi-Fi...");
