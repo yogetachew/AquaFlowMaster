@@ -6,7 +6,7 @@
 
 // Replace these with your network credentials
 char* ssid = "NU-IoT"; //Replace with the ssid name of the wifi
-const char* password = "tmvmrppp"; //Replace with the password name of the wifi 
+const char* password = "bflpfzmt"; //Replace with the password name of the wifi 
 const int sensorPin = A0;
 
 // Device ID
