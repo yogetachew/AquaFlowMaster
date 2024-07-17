@@ -3,8 +3,8 @@
 
 
 // Replace these with your network credentials
-const char* ssid = "Verizon-MiFi8800L-B8D0";
-const char* password = "3c55dc92";
+const char* ssid = "NU-IoT";
+const char* password = "mstvddmh";
 
 
 void setup() {
